@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import path from "path";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -12,15 +13,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Load and parse prompts from prompt.text
-    const promptData = JSON.parse(await fs.readFile("./prompt.text", "utf-8"));
+    // Resolve the absolute path to prompt.text
+    const filePath = path.join(process.cwd(), "prompt.text");
+    const promptData = JSON.parse(await fs.readFile(filePath, "utf-8"));
+    
     const systemPrompt = promptData.data.find((p) => p.name === systemPromptName);
 
     if (!systemPrompt) {
       return res.status(404).json({ error: `System prompt '${systemPromptName}' not found.` });
     }
 
-    // Prepare payload for Cloudflare AI API
     const payload = {
       messages: [
         { role: "system", content: systemPrompt.system_message },
@@ -28,7 +30,6 @@ export default async function handler(req, res) {
       ]
     };
 
-    // Call Cloudflare AI API
     const response = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/183ecd46407b11442f4befcc6e2b695b/ai/run/@cf/meta/llama-3-8b-instruct",
       {
@@ -52,4 +53,4 @@ export default async function handler(req, res) {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });
   }
-                          }
+}

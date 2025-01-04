@@ -17,19 +17,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Log the current working directory
     console.log("Current working directory:", process.cwd());
 
-    // Resolve the absolute path to prompt.text
     const filePath = path.join(process.cwd(), "prompt.text");
     console.log("Resolved file path:", filePath);
 
-    // Read and parse the prompt.text file
     const promptFileContent = await fs.readFile(filePath, "utf-8");
     console.log("Successfully read the prompt.text file");
     const promptData = JSON.parse(promptFileContent);
 
-    // Find the system prompt
     const systemPrompt = promptData.data.find((p) => p.name === systemPromptName);
     if (!systemPrompt) {
       console.log(`System prompt '${systemPromptName}' not found`);
@@ -38,7 +34,6 @@ export default async function handler(req, res) {
 
     console.log("Found system prompt:", systemPrompt);
 
-    // Prepare the payload for Cloudflare API
     const payload = {
       messages: [
         { role: "system", content: systemPrompt.system_message },
@@ -46,48 +41,48 @@ export default async function handler(req, res) {
       ]
     };
 
-    console.log("Prepared payload for Cloudflare API");
+    console.log("Prepared payload for Cloudflare API:", JSON.stringify(payload, null, 2));
 
-    // Make the API request with a timeout
-    const fetchWithTimeout = async (url, options, timeout = 5000) => {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), timeout);
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal
-      });
-      clearTimeout(id);
-      return response;
-    };
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 10000); // 10-second timeout for the API call
 
-    const response = await fetchWithTimeout(
-      "https://api.cloudflare.com/client/v4/accounts/183ecd46407b11442f4befcc6e2b695b/ai/run/@cf/meta/llama-3-8b-instruct",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer yAD-yqwlds52sZOPKgB1bk42aTnw83kcoiq54xu_"
-        },
-        body: JSON.stringify(payload)
-      },
-      10000 // Timeout in milliseconds
-    );
+    try {
+      const response = await fetch(
+        "https://api.cloudflare.com/client/v4/accounts/183ecd46407b11442f4befcc6e2b695b/ai/run/@cf/meta/llama-3-8b-instruct",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer yAD-yqwlds52sZOPKgB1bk42aTnw83kcoiq54xu_"
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        }
+      );
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.log("Cloudflare API error:", error);
-      return res.status(response.status).json({ error: error || "Cloudflare API call failed" });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log("Cloudflare API error response:", errorText);
+        return res.status(response.status).json({ error: errorText || "Cloudflare API call failed" });
+      }
+
+      const data = await response.json();
+      console.log("Cloudflare API response:", data);
+      res.status(200).json({ reply: data });
+    } catch (err) {
+      if (err.name === "AbortError") {
+        console.log("Cloudflare API request timed out");
+        return res.status(504).json({ error: "Cloudflare API request timed out." });
+      }
+      console.error("Error during Cloudflare API call:", err);
+      res.status(500).json({ error: "Error during Cloudflare API call" });
     }
-
-    // Return the response from the Cloudflare API
-    const data = await response.json();
-    console.log("Cloudflare API response:", data);
-    res.status(200).json({ reply: data });
   } catch (error) {
-    if (error.name === "AbortError") {
-      console.log("Request timed out");
-      res.status(504).json({ error: "Request timed out." });
-    } else if (error.code === "ENOENT") {
+    if (error.code === "ENOENT") {
       console.log("File not found:", error.path);
       res.status(500).json({ error: `File not found: ${error.path}` });
     } else {
@@ -95,4 +90,4 @@ export default async function handler(req, res) {
       res.status(500).json({ error: "Internal server error" });
     }
   }
-        }
+}

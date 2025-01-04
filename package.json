@@ -4,14 +4,10 @@
   "description": "AI-powered API using Cloudflare and Vercel serverless functions.",
   "main": "api/chat.js",
   "scripts": {
-    "start": "vercel dev",
-    "build": "vercel build"
+    "start": "vercel dev"
   },
   "dependencies": {
     "node-fetch": "^3.3.2"
-  },
-  "devDependencies": {
-    "vercel": "^28.19.0"
   },
   "engines": {
     "node": ">=18.x"

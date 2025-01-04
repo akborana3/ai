@@ -1,93 +1,61 @@
-import fs from "fs/promises";
-import path from "path";
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const fetch = require('node-fetch');
 
-export default async function handler(req, res) {
-  console.log("API handler started");
+const app = express();
+const port = process.env.PORT || 8080;
 
-  if (req.method !== "POST") {
-    console.log("Invalid request method");
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+app.use(express.json());
 
-  const { systemPromptName, userMessage } = req.body;
-
-  if (!systemPromptName || !userMessage) {
-    console.log("Missing required parameters");
-    return res.status(400).json({ error: "Missing systemPromptName or userMessage" });
-  }
-
-  try {
-    console.log("Current working directory:", process.cwd());
-
-    const filePath = path.join(process.cwd(), "prompt.text");
-    console.log("Resolved file path:", filePath);
-
-    const promptFileContent = await fs.readFile(filePath, "utf-8");
-    console.log("Successfully read the prompt.text file");
-    const promptData = JSON.parse(promptFileContent);
-
-    const systemPrompt = promptData.data.find((p) => p.name === systemPromptName);
-    if (!systemPrompt) {
-      console.log(`System prompt '${systemPromptName}' not found`);
-      return res.status(404).json({ error: `System prompt '${systemPromptName}' not found.` });
-    }
-
-    console.log("Found system prompt:", systemPrompt);
-
-    const payload = {
-      messages: [
-        { role: "system", content: systemPrompt.system_message },
-        { role: "user", content: userMessage }
-      ]
-    };
-
-    console.log("Prepared payload for Cloudflare API:", JSON.stringify(payload, null, 2));
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 10000); // 10-second timeout for the API call
+// Endpoint to handle chat requests
+app.post('/api/chat', async (req, res) => {
+    const userMessage = req.body.query;
 
     try {
-      const response = await fetch(
-        "https://api.cloudflare.com/client/v4/accounts/183ecd46407b11442f4befcc6e2b695b/ai/run/@cf/meta/llama-3-8b-instruct",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer yAD-yqwlds52sZOPKgB1bk42aTnw83kcoiq54xu_"
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        }
-      );
+        // Read the prompt.text file (adjust the path if necessary)
+        const prompt = fs.readFileSync(path.join(__dirname, 'prompt.text'), 'utf-8');
 
-      clearTimeout(timeout);
+        // Prepare payload to send to Cloudflare API
+        const payload = {
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are ChatGPT, a large language model that knows everything in detail. Answer in as many details as possible.',
+                },
+                {
+                    role: 'user',
+                    content: userMessage,
+                }
+            ]
+        };
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log("Cloudflare API error response:", errorText);
-        return res.status(response.status).json({ error: errorText || "Cloudflare API call failed" });
-      }
+        // Send request to Cloudflare API
+        const response = await fetch(
+            'https://api.cloudflare.com/client/v4/accounts/183ecd46407b11442f4befcc6e2b695b/ai/run/@cf/meta/llama-3-8b-instruct',
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer yAD-yqwlds52sZOPKgB1bk42aTnw83kcoiq54xu_'
+                },
+                body: JSON.stringify(payload)
+            }
+        );
 
-      const data = await response.json();
-      console.log("Cloudflare API response:", data);
-      res.status(200).json({ reply: data });
-    } catch (err) {
-      if (err.name === "AbortError") {
-        console.log("Cloudflare API request timed out");
-        return res.status(504).json({ error: "Cloudflare API request timed out." });
-      }
-      console.error("Error during Cloudflare API call:", err);
-      res.status(500).json({ error: "Error during Cloudflare API call" });
+        // Parse the response from Cloudflare API
+        const data = await response.json();
+
+        // Return the response from Cloudflare API to the client
+        res.json(data);
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      console.log("File not found:", error.path);
-      res.status(500).json({ error: `File not found: ${error.path}` });
-    } else {
-      console.error("Unexpected error:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  }
-}
+});
+
+// Start the server
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});

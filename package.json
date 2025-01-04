@@ -1,18 +1,13 @@
 {
-  "name": "vercel-ai-api",
+  "name": "node-api",
   "version": "1.0.0",
-  "description": "AI-powered API using Cloudflare and Vercel serverless functions.",
+  "description": "Node.js API for Hugging Face",
   "main": "api/chat.js",
   "scripts": {
-    "start": "vercel dev"
+    "start": "node api/chat.js"
   },
   "dependencies": {
-    "node-fetch": "^3.3.2"
-  },
-  "engines": {
-    "node": ">=18.x"
-  },
-  "keywords": ["AI", "API", "Vercel", "Cloudflare"],
-  "author": "AKAY",
-  "license": "MIT"
+    "express": "^4.17.1",
+    "node-fetch": "^3.0.0"
+  }
 }
